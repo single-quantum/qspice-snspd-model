@@ -3,23 +3,23 @@
     «symbol
       «type: Ø(.DLL)»
       «shorted pins: false»
-      «rect (-500,300) (500,-400) 0 0 0 0x4000000 0x4000000 -1 1 -1»
+      «rect (-500,300) (500,-300) 0 0 0 0x4000000 0x4000000 -1 1 -1»
       «text (0,0) 1 12 0 0x1000000 -1 -1 "X1"»
       «text (0,-100) 0.681 13 0 0x1000000 -1 -1 "snspd_X1"»
-      «text (0,-700) 0.681 13 0 0x1000000 -1 -1 "float width=width"»
-      «text (0,-850) 0.681 13 0 0x1000000 -1 -1 "float length=length"»
-      «text (0,-1000) 0.681 13 0 0x1000000 -1 -1 "float thickness=thickness"»
-      «text (0,-1150) 0.681 13 0 0x1000000 -1 -1 "int resolution=resolution"»
-      «text (0,-1450) 0.681 13 0 0x1000000 -1 -1 "float Tc=Tc"»
-      «text (0,-1600) 0.681 13 0 0x1000000 -1 -1 "float Tsub=Tsub"»
-      «text (0,-1750) 0.681 13 0 0x1000000 -1 -1 "float Ic0K=Ic0K"»
-      «text (50,-1900) 0.681 13 0 0x1000000 -1 -1 "float Rsheet=Rsheet"»
-      «text (0,-2200) 0.681 13 0 0x1000000 -1 -1 "bool hotspot=hotspot"»
-      «text (0,-2350) 0.681 13 0 0x1000000 -1 -1 "float ths=ths"»
-      «text (0,-2500) 0.681 13 0 0x1000000 -1 -1 "float Ths=Ths"»
-      «text (0,-2650) 0.681 13 0 0x1000000 -1 -1 "float sizehs=sizehs"»
-      «pin (-500,0) (0,0) 1 14 145 0x0 -1 "IN"»
-      «pin (500,0) (0,0) 1 14 146 0x0 -1 "OUT"»
+      «text (0,800) 0.681 13 0 0x1000000 -1 -1 "float width=width"»
+      «text (0,950) 0.681 13 0 0x1000000 -1 -1 "float length=length"»
+      «text (0,650) 0.681 13 0 0x1000000 -1 -1 "float thickness=thickness"»
+      «text (50,500) 0.681 13 0 0x1000000 -1 -1 "int resolution=resolution"»
+      «text (-650,-350) 0.681 13 0 0x1000000 -1 -1 "float Tc=Tc"»
+      «text (-650,-500) 0.681 13 0 0x1000000 -1 -1 "float Tsub=Tsub"»
+      «text (-650,-650) 0.681 13 0 0x1000000 -1 -1 "float Ic0K=Ic0K"»
+      «text (-650,-800) 0.681 13 0 0x1000000 -1 -1 "float Rsheet=Rsheet"»
+      «text (650,-350) 0.681 13 0 0x1000000 -1 -1 "bool hotspot=hotspot"»
+      «text (650,-500) 0.681 13 0 0x1000000 -1 -1 "float ths=ths"»
+      «text (650,-650) 0.681 13 0 0x1000000 -1 -1 "float Ths=Ths"»
+      «text (650,-800) 0.681 13 0 0x1000000 -1 -1 "float sizehs=sizehs"»
+      «pin (-500,0) (0,-100) 1 14 145 0x0 -1 "IN"»
+      «pin (500,0) (0,-100) 1 14 146 0x0 -1 "OUT"»
     »
   »
 »

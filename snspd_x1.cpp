@@ -29,7 +29,7 @@ union uData
 
 struct sSNSPD_X1
 {
-    double resitance;
+    double resistance;
     double* temperatures;
     double  width;
     double  length;
@@ -40,13 +40,14 @@ struct sSNSPD_X1
     double  Tsub;
     double  Ic0K;
     double  Rsheet;
+    double  Rsegment;
     bool    hotspot;
     double  ths;
     double  Ths;
     double  sizehs;
 
     // Constructor (optional, but good practice in C++)
-    sSNSPD_X1() : resitance(0.0), temperatures(nullptr) {}
+    sSNSPD_X1() : resistance(0.0), temperatures(nullptr) {}
 
     // Destructor (essential for managing dynamically allocated memory)
     ~sSNSPD_X1() {
@@ -106,7 +107,10 @@ double calcualteIc(double Ic0K, double Tc, double temperature){
 
 
 // Simulation Function
-void createHotspot(sSNSPD_X1 *opaque){
+bool isSC(double current, double temperature, double Ic0K , double Tc){
+    return abs(current) < calcualteIc(Ic0K, Tc, temperature) && temperature <= Tc;
+}
+void createHotspot(sSNSPD_X1 *opaque, double current){
     int hotspot_segments = (int)(opaque->sizehs * opaque->resolution / opaque->length);
     float resistance = 0.0;
 
@@ -115,8 +119,8 @@ void createHotspot(sSNSPD_X1 *opaque){
         for (int n = start_index_hotspot; n < start_index_hotspot + hotspot_segments; ++n) {
             int start_index_hotspot = (1 + i)*opaque->resolution;
             opaque->temperatures[i] = opaque->Ths;
-            if (!){
-                opaque->resistance += opaque->Rsheet;
+            if (!isSC(current, opaque->temperatures[i], opaque->Ic0K, opaque->Tc)){
+                opaque->resistance = opaque->Rsegment++;
             }
 
         }
@@ -124,6 +128,80 @@ void createHotspot(sSNSPD_X1 *opaque){
 
 }
 
+void diagonalSC(sSNSPD_X1 *opaque, int index, double dt, double* diagonal, double* off_diagonal, double* right_hand_side){
+    double alpha = calcAlpha(opaque->temperatures[index]);
+    double kapa = calcKapaSC(opaque->thickness, opaque->Rsheet, opaque->Tc, opaque->temperatures[index]); 
+    double heat_cap = calcElectronHCSC(opaque->Tc, opaque->temperatures[index]) + calcPhononHC(opaque->temperatures[index]);
+
+    double r = kapa * dt / (2 * pow(opaque->dlength,2) * heat_cap);
+    double h = alpha * dt / (2 * opaque->thickness * heat_cap);
+    double g = dt / heat_cap * ( opaque->Tsub * alpha / opaque->thickness);
+
+    off_diagonal[index] = -r;
+    diagonal[index]=  1 + h + 2 * r;
+    right_hand_side[index] = opaque->temperatures[index] * (1 - h - 2 * r) + r * (opaque->temperatures[index+1] + opaque->temperatures[index-1]) + g;
+}    
+
+void  diagonalNSC(sSNSPD_X1 *opaque, int index, double dt, double current, double* diagonal, double* off_diagonal, double* right_hand_side){
+    double alpha = calcAlpha(opaque->temperatures[index]);
+    double kapa = calcKapa(opaque->thickness, opaque->Rsheet, opaque->temperatures[index]);
+    double heat_cap = calcElectronHC(opaque->temperatures[index]) + calcPhononHC(opaque->temperatures[index]);
+
+    double r = kapa * dt / (2 * pow(opaque->dlength,2) * heat_cap);
+    double h = alpha * dt / (2 * opaque->thickness * heat_cap);
+    double g = dt / heat_cap * ( opaque->Tsub * alpha  + pow(current / opaque->width, 2) * opaque->Rsheet) / opaque->thickness;
+
+    off_diagonal[index] = -r;
+    diagonal[index]=  1 + h + 2 * r;
+    right_hand_side[index] = opaque->temperatures[index] * (1 - h - 2 * r) + r * (opaque->temperatures[index+1] + opaque->temperatures[index-1]) + g;
+}
+
+double calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
+    //cdef int i, it, il
+    //cdef double m
+    //cdef double resistance = 0
+    double resistance = 0;
+    double* diagonal = (double*)malloc(opaque->resolution * sizeof(double));
+    double* off_diagonal = (double*)malloc(opaque->resolution * sizeof(double));
+    double* right_hand_side = (double*)malloc(opaque->resolution * sizeof(double));
+    
+    diagonal[0] = diagonal[opaque->resolution - 1] = 1.0;
+    right_hand_side[0] = right_hand_side[opaque->resolution - 1] = opaque->Tsub;
+    off_diagonal[0] = off_diagonal[opaque->resolution - 1] = 0;
+
+    //Get Diagonals for C-N matrix and total resistance
+
+    for (int i = 1; i < opaque->resolution - 1; ++i) {
+        if (isSC(current, opaque->temperatures[i], opaque->Ic0K, opaque->Tc)){
+            diagonalSC(opaque, i, dt, diagonal, off_diagonal, right_hand_side);
+        } else {
+            diagonalNSC(opaque, i, dt, current, diagonal, off_diagonal, right_hand_side);
+        }
+    }
+    double m;
+    for (int it = 1; it < opaque->resolution; ++it) {
+        m = off_diagonal[it] / diagonal[it-1];
+        diagonal[it] = diagonal[it] - m * off_diagonal[it-1];
+        right_hand_side[it] = right_hand_side[it] - m * right_hand_side[it-1];   
+    }
+     
+
+    opaque->temperatures[opaque->resolution - 1] = right_hand_side[opaque->resolution - 1] / diagonal[opaque->resolution -1];  
+    for (int il = 1; il < opaque->resolution-2; ++il){
+        opaque->temperatures[il] = (right_hand_side[il] - off_diagonal[il] *  opaque->temperatures[il + 1]) / diagonal[il];
+        
+        if (!isSC(current, opaque->temperatures[il], opaque->Ic0K, opaque->Tc)){
+            resistance = opaque->Rsegment ++;
+
+        }
+    }
+
+    free(diagonal);
+    free(off_diagonal);
+    free(right_hand_side);
+    return resistance;
+
+}
 
 
 // 
@@ -159,6 +237,8 @@ sSNSPD_X1* initStates(union uData *data){
     opaque->ths        = data[10].d; // input parameter
     opaque->Ths        = data[11].d; // input parameter
     opaque->sizehs     = data[12].d; // input parameter
+    opaque->dlength    = opaque->length / (double)resolution;
+    opaque->Rsegment   = opaque->Rsheet * opaque->dlength / opaque->width;
 
     return opaque;
 
