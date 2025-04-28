@@ -8,7 +8,10 @@
 #include <math.h>
 #include <iostream>
 #include <cstring> // For bzero (though not the C++ way)
-
+#include <stdio.h>
+//#include <print>
+//#include <std>
+//using namespace std;
 
 union uData
 {
@@ -47,7 +50,7 @@ struct sSNSPD_X1
     double  sizehs;
 
     // Constructor (optional, but good practice in C++)
-    sSNSPD_X1() : resistance(0.0), temperatures(nullptr) {}
+    sSNSPD_X1() : resistance(1e-12), temperatures(nullptr) {}
 
     // Destructor (essential for managing dynamically allocated memory)
     ~sSNSPD_X1() {
@@ -130,7 +133,7 @@ void createHotspot(sSNSPD_X1 *opaque, double current){
 
 void diagonalSC(sSNSPD_X1 *opaque, int index, double dt, double* diagonal, double* off_diagonal, double* right_hand_side){
     double alpha = calcAlpha(opaque->temperatures[index]);
-    double kapa = calcKapaSC(opaque->thickness, opaque->Rsheet, opaque->Tc, opaque->temperatures[index]); 
+    double kapa = calcKapaSC(opaque->thickness, opaque->Rsheet, opaque->Tc, opaque->temperatures[index]);
     double heat_cap = calcElectronHCSC(opaque->Tc, opaque->temperatures[index]) + calcPhononHC(opaque->temperatures[index]);
 
     double r = kapa * dt / (2 * pow(opaque->dlength,2) * heat_cap);
@@ -140,7 +143,7 @@ void diagonalSC(sSNSPD_X1 *opaque, int index, double dt, double* diagonal, doubl
     off_diagonal[index] = -r;
     diagonal[index]=  1 + h + 2 * r;
     right_hand_side[index] = opaque->temperatures[index] * (1 - h - 2 * r) + r * (opaque->temperatures[index+1] + opaque->temperatures[index-1]) + g;
-}    
+}
 
 void  diagonalNSC(sSNSPD_X1 *opaque, int index, double dt, double current, double* diagonal, double* off_diagonal, double* right_hand_side){
     double alpha = calcAlpha(opaque->temperatures[index]);
@@ -164,7 +167,7 @@ double calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
     double* diagonal = (double*)malloc(opaque->resolution * sizeof(double));
     double* off_diagonal = (double*)malloc(opaque->resolution * sizeof(double));
     double* right_hand_side = (double*)malloc(opaque->resolution * sizeof(double));
-    
+
     diagonal[0] = diagonal[opaque->resolution - 1] = 1.0;
     right_hand_side[0] = right_hand_side[opaque->resolution - 1] = opaque->Tsub;
     off_diagonal[0] = off_diagonal[opaque->resolution - 1] = 0;
@@ -182,14 +185,14 @@ double calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
     for (int it = 1; it < opaque->resolution; ++it) {
         m = off_diagonal[it] / diagonal[it-1];
         diagonal[it] = diagonal[it] - m * off_diagonal[it-1];
-        right_hand_side[it] = right_hand_side[it] - m * right_hand_side[it-1];   
+        right_hand_side[it] = right_hand_side[it] - m * right_hand_side[it-1];
     }
-     
 
-    opaque->temperatures[opaque->resolution - 1] = right_hand_side[opaque->resolution - 1] / diagonal[opaque->resolution -1];  
+
+    opaque->temperatures[opaque->resolution - 1] = right_hand_side[opaque->resolution - 1] / diagonal[opaque->resolution -1];
     for (int il = 1; il < opaque->resolution-2; ++il){
         opaque->temperatures[il] = (right_hand_side[il] - off_diagonal[il] *  opaque->temperatures[il + 1]) / diagonal[il];
-        
+
         if (!isSC(current, opaque->temperatures[il], opaque->Ic0K, opaque->Tc)){
             resistance = opaque->Rsegment ++;
 
@@ -204,12 +207,10 @@ double calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
 }
 
 
-// 
+//
 sSNSPD_X1* initStates(union uData *data){
-    int resolution = data[ 4].i;
-    double Tsub = data[ 6].d;
-
-
+    int resolution = data[4].i;
+    double Tsub = data[6].d;
 
     sSNSPD_X1* opaque = new sSNSPD_X1; // Use 'new' for C++ objects
 
@@ -218,22 +219,20 @@ sSNSPD_X1* initStates(union uData *data){
 
     opaque->temperatures = new double[resolution]; // Use '->' to access member via pointer
 
-    // Set all segments to 
+    // Set all segments to
     for (int i = 0; i < resolution; ++i) {
         opaque->temperatures[i] = Tsub; // Example assignment
     }
 
-    std::cout << "First temperature: " << opaque->temperatures[0] << std::endl;
-
-    opaque->width      = data[ 1].d; // input parameter
-    opaque->length     = data[ 2].d; // input parameter
-    opaque->thickness  = data[ 3].d; // input parameter
+    opaque->width      = data[1].d; // input parameter
+    opaque->length     = data[2].d; // input parameter
+    opaque->thickness  = data[3].d; // input parameter
     opaque->resolution = resolution; // input parameter
-    opaque->Tc         = data[ 5].d; // input parameter
+    opaque->Tc         = data[5].d; // input parameter
     opaque->Tsub       = Tsub; // input parameter
-    opaque->Ic0K       = data[ 7].d; // input parameter
-    opaque->Rsheet     = data[ 8].d; // input parameter
-    opaque->hotspot    = data[ 9].b; // input parameter
+    opaque->Ic0K       = data[7].d; // input parameter
+    opaque->Rsheet     = data[8].d; // input parameter
+    opaque->hotspot    = data[9].b; // input parameter
     opaque->ths        = data[10].d; // input parameter
     opaque->Ths        = data[11].d; // input parameter
     opaque->sizehs     = data[12].d; // input parameter
@@ -246,22 +245,33 @@ sSNSPD_X1* initStates(union uData *data){
 
 extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double t, union uData *data)
 {
-   double  IN         = data[ 0].d; // input
-   double &OUT        = data[13].d; // output
+   double  IN1        = data[ 0].d; // input
+   //double  IN2        = data[ 1].d; // input
+   double &ROUT       = data[13].d; // output
 
-   if(!*opaque)
-   {
-        sSNSPD_X1* opaque = initStates(data);
+   sSNSPD_X1 *inst = *opaque;
 
+   if(!inst){
+        std::cout << "init";
+        inst = *opaque = initStates(data);
+        ROUT=inst->resistance;
+        return;
    }
-   struct sSNSPD_X1 *inst = *opaque;
 
+    //printf("%f", t);
+    //double current = (IN1 - IN2)/inst->resistance;
+    printf("%f", IN1);
+    //printf("%f", IN2);
+    //printf("%f", current);
+    //printf("%f", current);
 // Implement module evaluation code here:
+    ROUT = 1000;
 
 }
 
 extern "C" __declspec(dllexport) void Destroy(struct sSNSPD_X1 *inst)
 {
+    std::cout << "Des";
     delete inst;
     inst = nullptr;
    //free(inst);
