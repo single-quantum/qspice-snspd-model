@@ -203,9 +203,13 @@ void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
     opaque->temperatures[opaque->resolution - 1] = right_hand_side[opaque->resolution - 1] / diagonal[opaque->resolution -1];
     for (int il = opaque->resolution-2; il >=1; --il){
         opaque->temperatures[il] = (right_hand_side[il] - off_diagonal[il] *  opaque->temperatures[il + 1]) / diagonal[il];
-
+        //printf("%i\n", il);
         if (!isSC(current, opaque->temperatures[il], opaque->Ic0K, opaque->Tc)){
             resistance += opaque->Rsegment;
+            //printf("%5.1f\n", resistance);
+            //("%i\n", il);
+    //}
+    //}
         }
     }
     //if (resistance != MINRES){
@@ -265,7 +269,7 @@ extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double
         std::cout << "init";
         inst = *opaque = initStates(data);
         ROUT=inst->resistance;
-        return;
+        //return;
         //printf("%f.8", inst->length);
         //inst->resolution;
    }
@@ -280,8 +284,8 @@ extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double
    else{
         calcTotalResitance(inst, current, dt);
    }
-   printf("%3.2f\n", current*1e6);;
-   printf("%1.13f\n", dt);;
+   //printf("%3.2f\n", current*1e6);
+   //printf("%1.13f\n", dt);;
    ROUT=inst->resistance;
 
 }
