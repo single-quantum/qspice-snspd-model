@@ -109,17 +109,20 @@ double calcualteIc(double Ic0K, double Tc, double temperature){
     return Ic0K * pow(1.0-pow(temperature / Tc, 2),2);
 }
 
+double absFix( double input){
+   if (input >= 0){
+      return input;
+   }
+   else{
+      return -1.0*input;
+   }
+}
 
 // Simulation Function
 bool isSC(double current, double temperature, double Ic0K , double Tc){
-    //printf("%f", current);
-    //printf("%f", temperature);
-    //printf("%f", Ic0K);
-    //printf("%f", Tc);
-    return abs(current) < calcualteIc(Ic0K, Tc, temperature) and temperature <= Tc;
+    return absFix(current) < calcualteIc(Ic0K, Tc, temperature) and temperature <= Tc;
 }
 void createHotspot(sSNSPD_X1 *opaque, double current){
-    //printf("%i", opaque->resolution);
     int PNR = 1;
     int hotspot_segments = (int)(opaque->sizehs * opaque->resolution / opaque->length);
 
@@ -131,7 +134,6 @@ void createHotspot(sSNSPD_X1 *opaque, double current){
         for (int i = start_index_hotspot; i < start_index_hotspot + hotspot_segments; ++i) {
             opaque->temperatures[i] = opaque->Ths;
             if (not isSC(current, opaque->temperatures[i], opaque->Ic0K, opaque->Tc)){
-                  std::cout << "nsc";
                 resistance = opaque->Rsegment ++;
             }
 
