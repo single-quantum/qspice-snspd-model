@@ -173,9 +173,9 @@ void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
     //cdef double m
     //cdef double resistance = 0
     double resistance = MINRES;
-    double* diagonal = (double*)malloc(opaque->resolution * sizeof(double));
-    double* off_diagonal = (double*)malloc(opaque->resolution * sizeof(double));
-    double* right_hand_side = (double*)malloc(opaque->resolution * sizeof(double));
+    double* diagonal = new double[opaque->resolution];
+    double* off_diagonal = new double[opaque->resolution];
+    double* right_hand_side = new double[opaque->resolution];
 
     diagonal[0] = diagonal[opaque->resolution - 1] = 1.0;
     right_hand_side[0] = right_hand_side[opaque->resolution - 1] = opaque->Tsub;
@@ -201,7 +201,7 @@ void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
 
 
     opaque->temperatures[opaque->resolution - 1] = right_hand_side[opaque->resolution - 1] / diagonal[opaque->resolution -1];
-    for (int il = 1; il < opaque->resolution-2; ++il){
+    for (int il = opaque->resolution-2; il >=1; --il){
         opaque->temperatures[il] = (right_hand_side[il] - off_diagonal[il] *  opaque->temperatures[il + 1]) / diagonal[il];
 
         if (!isSC(current, opaque->temperatures[il], opaque->Ic0K, opaque->Tc)){
@@ -270,6 +270,7 @@ extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double
         //inst->resolution;
    }
    double dt = t - inst->time;
+
    inst->time = t;
    if (inst->hotspot && t >= inst->ths){
         std::cout << "*click*";
@@ -279,8 +280,8 @@ extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double
    else{
         calcTotalResitance(inst, current, dt);
    }
-   printf("%3.2f\n", current*1e6);
-
+   printf("%3.2f\n", current*1e6);;
+   printf("%1.13f\n", dt);;
    ROUT=inst->resistance;
 
 }
