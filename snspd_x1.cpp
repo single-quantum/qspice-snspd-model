@@ -116,27 +116,29 @@ bool isSC(double current, double temperature, double Ic0K , double Tc){
     //printf("%f", temperature);
     //printf("%f", Ic0K);
     //printf("%f", Tc);
-    return abs(current) < calcualteIc(Ic0K, Tc, temperature) && temperature <= Tc;
+    return abs(current) < calcualteIc(Ic0K, Tc, temperature) and temperature <= Tc;
 }
 void createHotspot(sSNSPD_X1 *opaque, double current){
     //printf("%i", opaque->resolution);
+    int PNR = 1;
     int hotspot_segments = (int)(opaque->sizehs * opaque->resolution / opaque->length);
+
     //("%i", hotspot_segments);
     double resistance = MINRES;
 
-    for (int i = 0; i < opaque->resolution; ++i) {
-        int start_index_hotspot = (1 + i)*opaque->resolution;
-        for (int n = start_index_hotspot; n < start_index_hotspot + hotspot_segments; ++n) {
-            int start_index_hotspot = (1 + i)*opaque->resolution;
+    for (int n = 0; n < PNR; ++n) {
+        int start_index_hotspot = (1 + n)*opaque->resolution / (1 + PNR) - (hotspot_segments / 2);
+        for (int i = start_index_hotspot; i < start_index_hotspot + hotspot_segments; ++i) {
             opaque->temperatures[i] = opaque->Ths;
-            if (!isSC(current, opaque->temperatures[i], opaque->Ic0K, opaque->Tc)){
-                resistance += opaque->Rsegment;
+            if (not isSC(current, opaque->temperatures[i], opaque->Ic0K, opaque->Tc)){
+                  std::cout << "nsc";
+                resistance = opaque->Rsegment ++;
             }
 
         }
     }
+    printf("%4.9f", resistance);
     opaque->resistance = resistance;
-    //printf("%f", resistance);
 
 }
 
@@ -201,7 +203,7 @@ void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
     opaque->temperatures[opaque->resolution - 1] = right_hand_side[opaque->resolution - 1] / diagonal[opaque->resolution -1];
     for (int il = opaque->resolution-2; il >=1; --il){
         opaque->temperatures[il] = (right_hand_side[il] - off_diagonal[il] *  opaque->temperatures[il + 1]) / diagonal[il];
-        if (!isSC(current, opaque->temperatures[il], opaque->Ic0K, opaque->Tc)){
+        if (not isSC(current, opaque->temperatures[il], opaque->Ic0K, opaque->Tc)){
             resistance += opaque->Rsegment;
         }
     }
@@ -274,8 +276,6 @@ extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double
    else{
         calcTotalResitance(inst, current, dt);
    }
-   //printf("%3.2f\n", current*1e6);
-   //printf("%1.13f\n", dt);;
    ROUT=inst->resistance;
 
 }
