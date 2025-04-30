@@ -185,8 +185,6 @@ void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
 
     for (int i = 1; i < opaque->resolution - 1; ++i) {
         if (isSC(current, opaque->temperatures[i], opaque->Ic0K, opaque->Tc)){
-            //printf("%5.1f\n", current*1e6);
-           // printf("%5.1f\n", opaque->temperatures[i]);
             diagonalSC(opaque, i, dt, diagonal, off_diagonal, right_hand_side);
         } else {
             diagonalNSC(opaque, i, dt, current, diagonal, off_diagonal, right_hand_side);
@@ -203,18 +201,11 @@ void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
     opaque->temperatures[opaque->resolution - 1] = right_hand_side[opaque->resolution - 1] / diagonal[opaque->resolution -1];
     for (int il = opaque->resolution-2; il >=1; --il){
         opaque->temperatures[il] = (right_hand_side[il] - off_diagonal[il] *  opaque->temperatures[il + 1]) / diagonal[il];
-        //printf("%i\n", il);
         if (!isSC(current, opaque->temperatures[il], opaque->Ic0K, opaque->Tc)){
             resistance += opaque->Rsegment;
-            //printf("%5.1f\n", resistance);
-            //("%i\n", il);
-    //}
-    //}
         }
     }
-    //if (resistance != MINRES){
-    //    printf("%5.1f\n", resistance);
-    //}
+
     opaque->resistance = resistance;
     free(diagonal);
     free(off_diagonal);
@@ -253,7 +244,6 @@ sSNSPD_X1* initStates(union uData *data){
     opaque->sizehs     = data[12].d; // input parameter
     opaque->dlength    = opaque->length / (double)resolution;
     opaque->Rsegment   = opaque->Rsheet * opaque->dlength / opaque->width;
-    printf("%4.5f", opaque->Rsegment);
     return opaque;
 
 }
@@ -266,10 +256,10 @@ extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double
    sSNSPD_X1 *inst = *opaque;
 
    if(!inst){
-        std::cout << "init";
         inst = *opaque = initStates(data);
         ROUT=inst->resistance;
-        //return;
+        inst->time = t;
+        return;
         //printf("%f.8", inst->length);
         //inst->resolution;
    }
