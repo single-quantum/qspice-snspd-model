@@ -9,9 +9,7 @@
 #include <iostream>
 #include <cstring> // For bzero (though not the C++ way)
 #include <stdio.h>
-//#include <print>
-//#include <std>
-//using namespace std;
+
 const double MINRES = 1e-12;
 union uData
 {
@@ -44,6 +42,7 @@ struct sSNSPD_X1
     double  Ic0K;
     double  Rsheet;
     double  Rsegment;
+    int     photonnumber;
     bool    hotspot;
     double  ths;
     double  Ths;
@@ -72,8 +71,9 @@ void bzero(void *ptr, unsigned int count)
 }
 
 // #undef pin names lest they collide with names in any header file(s) you might include.
-#undef IN
-#undef OUT
+#undef IN1
+#undef IN2
+#undef ROUT
 const double HEATCAP_ELECTRON_SF = 240;
 const double PHONON_HEATCAP_SF = 9.8;
 const double ALPHA_SF = 800;
@@ -105,28 +105,17 @@ double calcElectronHC(double temperature){
     return temperature * HEATCAP_ELECTRON_SF;
 }
 
-double calcualteIc(double Ic0K, double Tc, double temperature){
+double calcIc(double Ic0K, double Tc, double temperature){
     return Ic0K * pow(1.0-pow(temperature / Tc, 2),2);
 }
 
-double absFix( double input){
-   if (input >= 0){
-      return input;
-   }
-   else{
-      return -1.0*input;
-   }
-}
-
-// Simulation Function
 bool isSC(double current, double temperature, double Ic0K , double Tc){
-    return absFix(current) < calcualteIc(Ic0K, Tc, temperature) and temperature <= Tc;
+    return fabs(current) < calcIc(Ic0K, Tc, temperature) and temperature <= Tc;
 }
-void createHotspot(sSNSPD_X1 *opaque, double current){
-    int PNR = 1;
-    int hotspot_segments = (int)(opaque->sizehs * opaque->resolution / opaque->length);
 
-    //("%i", hotspot_segments);
+void createHotspot(sSNSPD_X1 *opaque, double current){
+    int PNR = opaque->photonnumber;
+    int hotspot_segments = (int)(opaque->sizehs * opaque->resolution / opaque->length);
     double resistance = MINRES;
 
     for (int n = 0; n < PNR; ++n) {
@@ -139,9 +128,7 @@ void createHotspot(sSNSPD_X1 *opaque, double current){
 
         }
     }
-    printf("%4.9f", resistance);
     opaque->resistance = resistance;
-
 }
 
 void diagonalSC(sSNSPD_X1 *opaque, int index, double dt, double* diagonal, double* off_diagonal, double* right_hand_side){
@@ -173,9 +160,6 @@ void  diagonalNSC(sSNSPD_X1 *opaque, int index, double dt, double current, doubl
 }
 
 void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
-    //cdef int i, it, il
-    //cdef double m
-    //cdef double resistance = 0
     double resistance = MINRES;
     double* diagonal = new double[opaque->resolution];
     double* off_diagonal = new double[opaque->resolution];
@@ -186,7 +170,6 @@ void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
     off_diagonal[0] = off_diagonal[opaque->resolution - 1] = 0;
 
     //Get Diagonals for C-N matrix and total resistance
-
     for (int i = 1; i < opaque->resolution - 1; ++i) {
         if (isSC(current, opaque->temperatures[i], opaque->Ic0K, opaque->Tc)){
             diagonalSC(opaque, i, dt, diagonal, off_diagonal, right_hand_side);
@@ -200,8 +183,6 @@ void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
         diagonal[it] = diagonal[it] - m * off_diagonal[it-1];
         right_hand_side[it] = right_hand_side[it] - m * right_hand_side[it-1];
     }
-
-
     opaque->temperatures[opaque->resolution - 1] = right_hand_side[opaque->resolution - 1] / diagonal[opaque->resolution -1];
     for (int il = opaque->resolution-2; il >=1; --il){
         opaque->temperatures[il] = (right_hand_side[il] - off_diagonal[il] *  opaque->temperatures[il + 1]) / diagonal[il];
@@ -246,6 +227,7 @@ sSNSPD_X1* initStates(union uData *data){
     opaque->ths        = data[10].d; // input parameter
     opaque->Ths        = data[11].d; // input parameter
     opaque->sizehs     = data[12].d; // input parameter
+    opaque->photonnumber = data[13].i;
     opaque->dlength    = opaque->length / (double)resolution;
     opaque->Rsegment   = opaque->Rsheet * opaque->dlength / opaque->width;
     return opaque;
@@ -255,7 +237,8 @@ sSNSPD_X1* initStates(union uData *data){
 extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double t, union uData *data)
 {
    double current = data[ 0].d; // input
-   double &ROUT = data[13].d; // output
+   //double IN2 = data[ 1].d; // input
+   double &ROUT = data[14].d; // output
 
    sSNSPD_X1 *inst = *opaque;
 
@@ -264,11 +247,9 @@ extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double
         ROUT=inst->resistance;
         inst->time = t;
         return;
-        //printf("%f.8", inst->length);
-        //inst->resolution;
    }
    double dt = t - inst->time;
-
+   //double current = (IN1 - IN2)/inst->resistance;
    inst->time = t;
    if (inst->hotspot && t >= inst->ths){
         std::cout << "*click*";
