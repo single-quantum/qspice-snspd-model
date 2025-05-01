@@ -51,6 +51,8 @@ struct sSNSPD_X1
     double* diagonal;
     double* off_diagonal;
     double* right_hand_side;
+    double  Tmax;
+    bool    running;
 
     // Constructor (optional, but good practice in C++)
     sSNSPD_X1(union uData *data) : resistance(MINRES), temperatures(nullptr), time(0) {
@@ -79,6 +81,8 @@ struct sSNSPD_X1
         photonnumber = data[13].i;
         dlength    = length / (double)resolution;
         Rsegment   = Rsheet * dlength / width;
+        Tmax       = Tsub;
+        running    = false;
 
     }
 
@@ -150,6 +154,7 @@ void createHotspot(sSNSPD_X1 *opaque, double current){
     int PNR = opaque->photonnumber;
     int hotspot_segments = (int)(opaque->sizehs * opaque->resolution / opaque->length);
     double resistance = MINRES;
+    double Tmax = opaque->Tsub;
 
     for (int n = 0; n < PNR; ++n) {
         int start_index_hotspot = (1 + n)*opaque->resolution / (1 + PNR) - (hotspot_segments / 2);
@@ -158,10 +163,11 @@ void createHotspot(sSNSPD_X1 *opaque, double current){
             if (not isSC(current, opaque->temperatures[i], opaque->Ic0K, opaque->Tc)){
                 resistance = opaque->Rsegment ++;
             }
-
         }
     }
     opaque->resistance = resistance;
+    opaque->Tmax = opaque->Ths;
+
 }
 
 void diagonalSC(sSNSPD_X1 *opaque, int index, double dt, double* diagonal, double* off_diagonal, double* right_hand_side){
@@ -194,6 +200,7 @@ void  diagonalNSC(sSNSPD_X1 *opaque, int index, double dt, double current, doubl
 
 void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
     double resistance = MINRES;
+    double Tmax = opaque->Tsub;
 
     opaque->diagonal[0] = opaque->diagonal[opaque->resolution - 1] = 1.0;
     opaque->right_hand_side[0] = opaque->right_hand_side[opaque->resolution - 1] = opaque->Tsub;
@@ -219,9 +226,13 @@ void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
         if (not isSC(current, opaque->temperatures[il], opaque->Ic0K, opaque->Tc)){
             resistance += opaque->Rsegment;
         }
+        if (opaque->temperatures[il] > Tmax){
+            Tmax = opaque->temperatures[il];
+        }
     }
 
     opaque->resistance = resistance;
+    opaque->Tmax = Tmax;
 
 }
 
@@ -242,11 +253,17 @@ extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double
    //double current = (IN1 - IN2)/inst->resistance;
    inst->time = t;
    if (inst->hotspot && t >= inst->ths){
+        //printf("%s\n","click");
         inst->hotspot = false;
+        inst->running = true;
         createHotspot(inst, current);
    }
-   else{
+   else if (inst->running){
         calcTotalResitance(inst, current, dt);
+        if (isSC(current, inst->Tmax, inst->Ic0K, inst->Tc)){
+            inst->running = false;
+            inst->resistance=MINRES;
+        }
    }
    ROUT=inst->resistance;
 
