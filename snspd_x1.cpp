@@ -48,6 +48,9 @@ struct sSNSPD_X1
     double  Ths;
     double  sizehs;
     double  time;
+    double* diagonal;
+    double* off_diagonal;
+    double* right_hand_side;
 
     // Constructor (optional, but good practice in C++)
     sSNSPD_X1(union uData *data) : resistance(MINRES), temperatures(nullptr), time(0) {
@@ -55,6 +58,9 @@ struct sSNSPD_X1
         resolution = data[4].i;
         Tsub = data[6].d;
         temperatures = new double[resolution]; // Use '->' to access member via pointer
+        diagonal = new double[resolution];
+        off_diagonal = new double[resolution];
+        right_hand_side = new double[resolution];
 
         for (int i = 0; i < resolution; ++i) {
             temperatures[i] = Tsub; // Example assignment
@@ -79,6 +85,9 @@ struct sSNSPD_X1
     // Destructor (essential for managing dynamically allocated memory)
     ~sSNSPD_X1() {
         delete[] temperatures;
+        delete[] diagonal;
+        delete[] off_diagonal;
+        delete[] right_hand_side;
     }
 };
 
@@ -185,46 +194,40 @@ void  diagonalNSC(sSNSPD_X1 *opaque, int index, double dt, double current, doubl
 
 void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
     double resistance = MINRES;
-    double* diagonal = new double[opaque->resolution];
-    double* off_diagonal = new double[opaque->resolution];
-    double* right_hand_side = new double[opaque->resolution];
 
-    diagonal[0] = diagonal[opaque->resolution - 1] = 1.0;
-    right_hand_side[0] = right_hand_side[opaque->resolution - 1] = opaque->Tsub;
-    off_diagonal[0] = off_diagonal[opaque->resolution - 1] = 0;
+    opaque->diagonal[0] = opaque->diagonal[opaque->resolution - 1] = 1.0;
+    opaque->right_hand_side[0] = opaque->right_hand_side[opaque->resolution - 1] = opaque->Tsub;
+    opaque->off_diagonal[0] = opaque->off_diagonal[opaque->resolution - 1] = 0;
 
     //Get Diagonals for C-N matrix and total resistance
     for (int i = 1; i < opaque->resolution - 1; ++i) {
         if (isSC(current, opaque->temperatures[i], opaque->Ic0K, opaque->Tc)){
-            diagonalSC(opaque, i, dt, diagonal, off_diagonal, right_hand_side);
+            diagonalSC(opaque, i, dt, opaque->diagonal, opaque->off_diagonal, opaque->right_hand_side);
         } else {
-            diagonalNSC(opaque, i, dt, current, diagonal, off_diagonal, right_hand_side);
+            diagonalNSC(opaque, i, dt, current, opaque->diagonal, opaque->off_diagonal, opaque->right_hand_side);
         }
     }
     double m;
     for (int it = 1; it < opaque->resolution; ++it) {
-        m = off_diagonal[it] / diagonal[it-1];
-        diagonal[it] = diagonal[it] - m * off_diagonal[it-1];
-        right_hand_side[it] = right_hand_side[it] - m * right_hand_side[it-1];
+        m = opaque->off_diagonal[it] / opaque->diagonal[it-1];
+        opaque->diagonal[it] = opaque->diagonal[it] - m * opaque->off_diagonal[it-1];
+        opaque->right_hand_side[it] = opaque->right_hand_side[it] - m * opaque->right_hand_side[it-1];
     }
-    opaque->temperatures[opaque->resolution - 1] = right_hand_side[opaque->resolution - 1] / diagonal[opaque->resolution -1];
+    opaque->temperatures[opaque->resolution - 1] = opaque->right_hand_side[opaque->resolution - 1] / opaque->diagonal[opaque->resolution -1];
     for (int il = opaque->resolution-2; il >=1; --il){
-        opaque->temperatures[il] = (right_hand_side[il] - off_diagonal[il] *  opaque->temperatures[il + 1]) / diagonal[il];
+        opaque->temperatures[il] = (opaque->right_hand_side[il] - opaque->off_diagonal[il] *  opaque->temperatures[il + 1]) / opaque->diagonal[il];
         if (not isSC(current, opaque->temperatures[il], opaque->Ic0K, opaque->Tc)){
             resistance += opaque->Rsegment;
         }
     }
 
     opaque->resistance = resistance;
-    free(diagonal);
-    free(off_diagonal);
-    free(right_hand_side);
+
 }
 
 extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double t, union uData *data)
 {
    double current = data[ 0].d; // input
-   //double IN2 = data[ 1].d; // input
    double &ROUT = data[14].d; // output
 
    sSNSPD_X1 *inst = *opaque;
