@@ -50,7 +50,31 @@ struct sSNSPD_X1
     double  time;
 
     // Constructor (optional, but good practice in C++)
-    sSNSPD_X1() : resistance(MINRES), temperatures(nullptr), time(0) {}
+    sSNSPD_X1(union uData *data) : resistance(MINRES), temperatures(nullptr), time(0) {
+
+        resolution = data[4].i;
+        Tsub = data[6].d;
+        temperatures = new double[resolution]; // Use '->' to access member via pointer
+
+        for (int i = 0; i < resolution; ++i) {
+            temperatures[i] = Tsub; // Example assignment
+        }
+
+        width      = data[1].d; // input parameter
+        length     = data[2].d; // input parameter
+        thickness  = data[3].d; // input parameter
+        Tc         = data[5].d; // input parameter
+        Ic0K       = data[7].d; // input parameter
+        Rsheet     = data[8].d; // input parameter
+        hotspot    = data[9].b; // input parameter
+        ths        = data[10].d; // input parameter
+        Ths        = data[11].d; // input parameter
+        sizehs     = data[12].d; // input parameter
+        photonnumber = data[13].i;
+        dlength    = length / (double)resolution;
+        Rsegment   = Rsheet * dlength / width;
+
+    }
 
     // Destructor (essential for managing dynamically allocated memory)
     ~sSNSPD_X1() {
@@ -197,43 +221,6 @@ void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
     free(right_hand_side);
 }
 
-
-//
-sSNSPD_X1* initStates(union uData *data){
-    int resolution = data[4].i;
-    double Tsub = data[6].d;
-
-    sSNSPD_X1* opaque = new sSNSPD_X1; // Use 'new' for C++ objects
-
-    // If you still want to zero out the memory (though the constructor initializes)
-    std::memset(opaque, 0, sizeof(sSNSPD_X1)); // C++ way to zero memory
-
-    opaque->temperatures = new double[resolution]; // Use '->' to access member via pointer
-
-    // Set all segments to
-    for (int i = 0; i < resolution; ++i) {
-        opaque->temperatures[i] = Tsub; // Example assignment
-    }
-
-    opaque->width      = data[1].d; // input parameter
-    opaque->length     = data[2].d; // input parameter
-    opaque->thickness  = data[3].d; // input parameter
-    opaque->resolution = resolution; // input parameter
-    opaque->Tc         = data[5].d; // input parameter
-    opaque->Tsub       = Tsub; // input parameter
-    opaque->Ic0K       = data[7].d; // input parameter
-    opaque->Rsheet     = data[8].d; // input parameter
-    opaque->hotspot    = data[9].b; // input parameter
-    opaque->ths        = data[10].d; // input parameter
-    opaque->Ths        = data[11].d; // input parameter
-    opaque->sizehs     = data[12].d; // input parameter
-    opaque->photonnumber = data[13].i;
-    opaque->dlength    = opaque->length / (double)resolution;
-    opaque->Rsegment   = opaque->Rsheet * opaque->dlength / opaque->width;
-    return opaque;
-
-}
-
 extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double t, union uData *data)
 {
    double current = data[ 0].d; // input
@@ -243,7 +230,7 @@ extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double
    sSNSPD_X1 *inst = *opaque;
 
    if(!inst){
-        inst = *opaque = initStates(data);
+        inst = *opaque = new sSNSPD_X1(data);
         ROUT=inst->resistance;
         inst->time = t;
         return;
@@ -252,7 +239,6 @@ extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double
    //double current = (IN1 - IN2)/inst->resistance;
    inst->time = t;
    if (inst->hotspot && t >= inst->ths){
-        std::cout << "*click*";
         inst->hotspot = false;
         createHotspot(inst, current);
    }
