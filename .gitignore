@@ -42,6 +42,10 @@
 *.idb
 *.pdb
 
+#Spice
+*.qopraw
+*.qraw
+
 # Kernel Module Compile Results
 *.mod*
 *.cmd
