@@ -258,12 +258,17 @@ extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double
         inst->running = true;
         createHotspot(inst, current);
    }
-   else if (inst->running){
-        calcTotalResitance(inst, current, dt);
-        if (isSC(current, inst->Tmax, inst->Ic0K, inst->Tc)){
-            inst->running = false;
-            inst->resistance=MINRES;
-        }
+   //else if (inst->running){
+   else if (!isSC(current, inst->Tmax, inst->Ic0K, inst->Tc) || inst->resistance > MINRES ){
+            //inst->running = false;
+            //inst->resistance=MINRES;
+            calcTotalResitance(inst, current, dt);
+        //} 
+        //calcTotalResitance(inst, current, dt);
+        //if (isSC(current, inst->Tmax, inst->Ic0K, inst->Tc)){
+        //    inst->running = false;
+        //    inst->resistance=MINRES;
+        //}
    }
    ROUT=inst->resistance;
 
