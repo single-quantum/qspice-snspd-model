@@ -82,6 +82,6 @@
   «text (-1218,2350) 1 15 0 0x1000000 -1 -1 "ï»¿.params width=100e-9 length=1.5e-6 thickness=4e-9 resolution=1000"»
   «text (-3700,2150) 1 7 0 0x1000000 -1 -1 "ï»¿.params Tc=10.5 Tsub=2 Ic0k=20.5e-6 Rsheet=600"»
   «text (-3700,1950) 1 7 0 0x1000000 -1 -1 "ï»¿.params hotspot=1 hstime=0 Ths=8 sizehs=15e-9 PNR=1"»
-  «text (-3650,2550) 1 7 0 0x1000000 -1 -1 "ï»¿.params Lkin=800n"»
+  «text (-3650,2550) 1 7 0 0x1000000 -1 -1 "ï»¿.params Lkin=600n"»
 »
 
