@@ -10,6 +10,7 @@
 #include <cstring> // For bzero (though not the C++ way)
 #include <stdio.h>
 
+const double TSUBERROR = 1.01;
 const double MINRES = 1e-12;
 union uData
 {
@@ -255,19 +256,18 @@ extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double
    if (inst->hotspot && t >= inst->ths){
         //printf("%s\n","click");
         inst->hotspot = false;
-        inst->running = true;
+        //inst->running = true;
         createHotspot(inst, current);
    }
-   else if (inst->running){
-   //else if (!isSC(current, inst->Tmax, inst->Ic0K, inst->Tc) || inst->resistance > MINRES ){
-            //inst->running = false;
-            //inst->resistance=MINRES;
-        calcTotalResitance(inst, current, dt);
-        //} 
-        //calcTotalResitance(inst, current, dt);
-        if (isSC(current, inst->Tmax, inst->Ic0K, inst->Tc)){
-            inst->running = false;
-            inst->resistance=MINRES;
+   else{
+        if (inst->Tmax > inst->Tsub*TSUBERROR){
+            calcTotalResitance(inst, current, dt);
+        }
+        else if(isSC(current, inst->Tsub, inst->Ic0K, inst->Tc)){
+            calcTotalResitance(inst, current, dt);
+        }
+        else{
+            ROUT=MINRES;
         }
    }
    ROUT=inst->resistance;
