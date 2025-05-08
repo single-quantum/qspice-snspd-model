@@ -1,14 +1,11 @@
-// Automatically generated C++ file on Thu Apr 24 13:03:17 2025
-//
-// To build with Digital Mars C++ Compiler:
-//
-//    dmc -mn -WD snspd_x1.cpp kernel32.lib
+//    cl /LD /std:c++17 snspd_x1.cpp kernel32.lib
 
 #include <malloc.h>
 #include <math.h>
 #include <iostream>
-#include <cstring> // For bzero (though not the C++ way)
 #include <stdio.h>
+#include <execution>
+#include <vector>
 
 const double TSUBERROR = 1.01;
 const double MINRES = 1e-12;
@@ -56,30 +53,16 @@ struct sSNSPD_X1
     bool    running;
 
     // Constructor (optional, but good practice in C++)
-    sSNSPD_X1(union uData *data) : resistance(MINRES), temperatures(nullptr), time(0) {
-
-        resolution = data[4].i;
-        Tsub = data[6].d;
+    sSNSPD_X1(union uData *data) : resistance(MINRES), temperatures(nullptr), time(0),
+    width(data[1].d), length(data[2].d), thickness(data[3].d), resolution(data[4].i), Tsub(data[6].d),
+    Tc(data[5].d),  Ic0K(data[7].d), Rsheet(data[8].d), hotspot(data[9].b), ths(data[10].d), 
+    Ths(data[11].d), sizehs(data[12].d), photonnumber(data[13].i){
         temperatures = new double[resolution]; // Use '->' to access member via pointer
         diagonal = new double[resolution];
         off_diagonal = new double[resolution];
         right_hand_side = new double[resolution];
 
-        for (int i = 0; i < resolution; ++i) {
-            temperatures[i] = Tsub; // Example assignment
-        }
-
-        width      = data[1].d; // input parameter
-        length     = data[2].d; // input parameter
-        thickness  = data[3].d; // input parameter
-        Tc         = data[5].d; // input parameter
-        Ic0K       = data[7].d; // input parameter
-        Rsheet     = data[8].d; // input parameter
-        hotspot    = data[9].b; // input parameter
-        ths        = data[10].d; // input parameter
-        Ths        = data[11].d; // input parameter
-        sizehs     = data[12].d; // input parameter
-        photonnumber = data[13].i;
+        std::fill(temperatures, temperatures + resolution, Tsub);
         dlength    = length / (double)resolution;
         Rsegment   = Rsheet * dlength / width;
         Tmax       = Tsub;
@@ -99,14 +82,6 @@ struct sSNSPD_X1
 // int DllMain() must exist and return 1 for a process to load the .DLL
 // See https://docs.microsoft.com/en-us/windows/win32/dlls/dllmain for more information.
 int __stdcall DllMain(void *module, unsigned int reason, void *reserved) { return 1; }
-
-void bzero(void *ptr, unsigned int count)
-{
-   unsigned char *first = (unsigned char *) ptr;
-   unsigned char *last  = first + count;
-   while(first < last)
-      *first++ = '\0';
-}
 
 // #undef pin names lest they collide with names in any header file(s) you might include.
 #undef IN1
@@ -148,7 +123,7 @@ double calcIc(double Ic0K, double Tc, double temperature){
 }
 
 bool isSC(double current, double temperature, double Ic0K , double Tc){
-    return fabs(current) < calcIc(Ic0K, Tc, temperature) and temperature <= Tc;
+    return fabs(current) < calcIc(Ic0K, Tc, temperature) && temperature <= Tc;
 }
 
 void createHotspot(sSNSPD_X1 *opaque, double current){
@@ -161,7 +136,7 @@ void createHotspot(sSNSPD_X1 *opaque, double current){
         int start_index_hotspot = (1 + n)*opaque->resolution / (1 + PNR) - (hotspot_segments / 2);
         for (int i = start_index_hotspot; i < start_index_hotspot + hotspot_segments; ++i) {
             opaque->temperatures[i] = opaque->Ths;
-            if (not isSC(current, opaque->temperatures[i], opaque->Ic0K, opaque->Tc)){
+            if (!isSC(current, opaque->temperatures[i], opaque->Ic0K, opaque->Tc)){
                 resistance = opaque->Rsegment ++;
             }
         }
@@ -207,14 +182,17 @@ void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
     opaque->right_hand_side[0] = opaque->right_hand_side[opaque->resolution - 1] = opaque->Tsub;
     opaque->off_diagonal[0] = opaque->off_diagonal[opaque->resolution - 1] = 0;
 
-    //Get Diagonals for C-N matrix and total resistance
-    for (int i = 1; i < opaque->resolution - 1; ++i) {
-        if (isSC(current, opaque->temperatures[i], opaque->Ic0K, opaque->Tc)){
-            diagonalSC(opaque, i, dt, opaque->diagonal, opaque->off_diagonal, opaque->right_hand_side);
-        } else {
-            diagonalNSC(opaque, i, dt, current, opaque->diagonal, opaque->off_diagonal, opaque->right_hand_side);
-        }
-    }
+    std::vector<int> indices(opaque->resolution - 2);
+    std::iota(indices.begin(), indices.end(), 1);
+
+    std::for_each(std::execution::par_unseq, indices.begin(), indices.end(),
+                  [&](int i) {
+                      if (isSC(current, opaque->temperatures[i], opaque->Ic0K, opaque->Tc)){
+                          diagonalSC(opaque, i, dt, opaque->diagonal, opaque->off_diagonal, opaque->right_hand_side);
+                      } else {
+                          diagonalNSC(opaque, i, dt, current, opaque->diagonal, opaque->off_diagonal, opaque->right_hand_side);
+                      }
+                  });
     double m;
     for (int it = 1; it < opaque->resolution; ++it) {
         m = opaque->off_diagonal[it] / opaque->diagonal[it-1];
@@ -224,7 +202,7 @@ void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
     opaque->temperatures[opaque->resolution - 1] = opaque->right_hand_side[opaque->resolution - 1] / opaque->diagonal[opaque->resolution -1];
     for (int il = opaque->resolution-2; il >=1; --il){
         opaque->temperatures[il] = (opaque->right_hand_side[il] - opaque->off_diagonal[il] *  opaque->temperatures[il + 1]) / opaque->diagonal[il];
-        if (not isSC(current, opaque->temperatures[il], opaque->Ic0K, opaque->Tc)){
+        if (!isSC(current, opaque->temperatures[il], opaque->Ic0K, opaque->Tc)){
             resistance += opaque->Rsegment;
         }
         if (opaque->temperatures[il] > Tmax){
@@ -251,23 +229,21 @@ extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double
         return;
    }
    double dt = t - inst->time;
-   //double current = (IN1 - IN2)/inst->resistance;
    inst->time = t;
    if (inst->hotspot && t >= inst->ths){
-        //printf("%s\n","click");
         inst->hotspot = false;
-        //inst->running = true;
         createHotspot(inst, current);
    }
    else{
-        if (inst->Tmax > inst->Tsub*TSUBERROR){
-            calcTotalResitance(inst, current, dt);
-        }
-        else if(isSC(current, inst->Tsub, inst->Ic0K, inst->Tc)){
-            calcTotalResitance(inst, current, dt);
+        if (inst->Tmax <= inst->Tsub*TSUBERROR && isSC(current, inst->Tsub, inst->Ic0K, inst->Tc)){
+            if (inst->Tmax != inst->Tsub){
+                std::fill(inst->temperatures, inst->temperatures + inst->resolution, inst->Tsub);
+                inst->Tmax = inst->Tsub;
+            }
+            ROUT=MINRES;
         }
         else{
-            ROUT=MINRES;
+            calcTotalResitance(inst, current, dt);
         }
    }
    ROUT=inst->resistance;
