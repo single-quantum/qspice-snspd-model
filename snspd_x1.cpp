@@ -1,11 +1,8 @@
-//    dmc -mn -WD snspd_x1.cpp kernel32.lib
 //    cl /LD /std:c++17 snspd_x1.cpp kernel32.lib
-
 
 #include <malloc.h>
 #include <math.h>
 #include <iostream>
-#include <cstring> // For bzero (though not the C++ way)
 #include <stdio.h>
 #include <execution>
 #include <vector>
@@ -56,30 +53,16 @@ struct sSNSPD_X1
     bool    running;
 
     // Constructor (optional, but good practice in C++)
-    sSNSPD_X1(union uData *data) : resistance(MINRES), temperatures(nullptr), time(0) {
-
-        resolution = data[4].i;
-        Tsub = data[6].d;
+    sSNSPD_X1(union uData *data) : resistance(MINRES), temperatures(nullptr), time(0),
+    width(data[1].d), length(data[2].d), thickness(data[3].d), resolution(data[4].i), Tsub(data[6].d),
+    Tc(data[5].d),  Ic0K(data[7].d), Rsheet(data[8].d), hotspot(data[9].b), ths(data[10].d), 
+    Ths(data[11].d), sizehs(data[12].d), photonnumber(data[13].i){
         temperatures = new double[resolution]; // Use '->' to access member via pointer
         diagonal = new double[resolution];
         off_diagonal = new double[resolution];
         right_hand_side = new double[resolution];
 
-        for (int i = 0; i < resolution; ++i) {
-            temperatures[i] = Tsub; // Example assignment
-        }
-
-        width      = data[1].d; // input parameter
-        length     = data[2].d; // input parameter
-        thickness  = data[3].d; // input parameter
-        Tc         = data[5].d; // input parameter
-        Ic0K       = data[7].d; // input parameter
-        Rsheet     = data[8].d; // input parameter
-        hotspot    = data[9].b; // input parameter
-        ths        = data[10].d; // input parameter
-        Ths        = data[11].d; // input parameter
-        sizehs     = data[12].d; // input parameter
-        photonnumber = data[13].i;
+        std::fill(temperatures, temperatures + resolution, Tsub);
         dlength    = length / (double)resolution;
         Rsegment   = Rsheet * dlength / width;
         Tmax       = Tsub;
@@ -99,14 +82,6 @@ struct sSNSPD_X1
 // int DllMain() must exist and return 1 for a process to load the .DLL
 // See https://docs.microsoft.com/en-us/windows/win32/dlls/dllmain for more information.
 int __stdcall DllMain(void *module, unsigned int reason, void *reserved) { return 1; }
-
-void bzero(void *ptr, unsigned int count)
-{
-   unsigned char *first = (unsigned char *) ptr;
-   unsigned char *last  = first + count;
-   while(first < last)
-      *first++ = '\0';
-}
 
 // #undef pin names lest they collide with names in any header file(s) you might include.
 #undef IN1
@@ -254,23 +229,21 @@ extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double
         return;
    }
    double dt = t - inst->time;
-   //double current = (IN1 - IN2)/inst->resistance;
    inst->time = t;
    if (inst->hotspot && t >= inst->ths){
-        //printf("%s\n","click");
         inst->hotspot = false;
-        //inst->running = true;
         createHotspot(inst, current);
    }
    else{
-        if (inst->Tmax > inst->Tsub*TSUBERROR){
-            calcTotalResitance(inst, current, dt);
-        }
-        else if(isSC(current, inst->Tsub, inst->Ic0K, inst->Tc)){
-            calcTotalResitance(inst, current, dt);
+        if (inst->Tmax <= inst->Tsub*TSUBERROR && isSC(current, inst->Tsub, inst->Ic0K, inst->Tc)){
+            if (inst->Tmax != inst->Tsub){
+                std::fill(inst->temperatures, inst->temperatures + inst->resolution, inst->Tsub);
+                inst->Tmax = inst->Tsub;
+            }
+            ROUT=MINRES;
         }
         else{
-            ROUT=MINRES;
+            calcTotalResitance(inst, current, dt);
         }
    }
    ROUT=inst->resistance;
