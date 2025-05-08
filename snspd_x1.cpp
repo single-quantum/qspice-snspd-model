@@ -65,7 +65,9 @@ struct sSNSPD_X1
         off_diagonal = new double[resolution];
         right_hand_side = new double[resolution];
 
-        std::fill(temperatures, temperatures + resolution, Tsub);
+        for (int i = 0; i < resolution; ++i) {
+            temperatures[i] = Tsub; // Example assignment
+        }
 
         width      = data[1].d; // input parameter
         length     = data[2].d; // input parameter
@@ -261,7 +263,7 @@ extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double
         if (inst->Tmax > inst->Tsub*TSUBERROR){
             calcTotalResitance(inst, current, dt);
         }
-        else if(isSC(current, inst->Tmax, inst->Ic0K, inst->Tc)){
+        else if(isSC(current, inst->Tsub, inst->Ic0K, inst->Tc)){
             calcTotalResitance(inst, current, dt);
         }
         else{
