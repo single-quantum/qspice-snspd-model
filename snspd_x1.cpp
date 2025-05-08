@@ -1,14 +1,14 @@
-// Automatically generated C++ file on Thu Apr 24 13:03:17 2025
-//
-// To build with Digital Mars C++ Compiler:
-//
 //    dmc -mn -WD snspd_x1.cpp kernel32.lib
+//    cl /LD /std:c++17 snspd_x1.cpp kernel32.lib
+
 
 #include <malloc.h>
 #include <math.h>
 #include <iostream>
 #include <cstring> // For bzero (though not the C++ way)
 #include <stdio.h>
+#include <execution>
+#include <vector>
 
 const double TSUBERROR = 1.01;
 const double MINRES = 1e-12;
@@ -148,7 +148,7 @@ double calcIc(double Ic0K, double Tc, double temperature){
 }
 
 bool isSC(double current, double temperature, double Ic0K , double Tc){
-    return fabs(current) < calcIc(Ic0K, Tc, temperature) and temperature <= Tc;
+    return fabs(current) < calcIc(Ic0K, Tc, temperature) && temperature <= Tc;
 }
 
 void createHotspot(sSNSPD_X1 *opaque, double current){
@@ -161,7 +161,7 @@ void createHotspot(sSNSPD_X1 *opaque, double current){
         int start_index_hotspot = (1 + n)*opaque->resolution / (1 + PNR) - (hotspot_segments / 2);
         for (int i = start_index_hotspot; i < start_index_hotspot + hotspot_segments; ++i) {
             opaque->temperatures[i] = opaque->Ths;
-            if (not isSC(current, opaque->temperatures[i], opaque->Ic0K, opaque->Tc)){
+            if (!isSC(current, opaque->temperatures[i], opaque->Ic0K, opaque->Tc)){
                 resistance = opaque->Rsegment ++;
             }
         }
@@ -207,14 +207,17 @@ void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
     opaque->right_hand_side[0] = opaque->right_hand_side[opaque->resolution - 1] = opaque->Tsub;
     opaque->off_diagonal[0] = opaque->off_diagonal[opaque->resolution - 1] = 0;
 
-    //Get Diagonals for C-N matrix and total resistance
-    for (int i = 1; i < opaque->resolution - 1; ++i) {
-        if (isSC(current, opaque->temperatures[i], opaque->Ic0K, opaque->Tc)){
-            diagonalSC(opaque, i, dt, opaque->diagonal, opaque->off_diagonal, opaque->right_hand_side);
-        } else {
-            diagonalNSC(opaque, i, dt, current, opaque->diagonal, opaque->off_diagonal, opaque->right_hand_side);
-        }
-    }
+    std::vector<int> indices(opaque->resolution - 2);
+    std::iota(indices.begin(), indices.end(), 1);
+
+    std::for_each(std::execution::par_unseq, indices.begin(), indices.end(),
+                  [&](int i) {
+                      if (isSC(current, opaque->temperatures[i], opaque->Ic0K, opaque->Tc)){
+                          diagonalSC(opaque, i, dt, opaque->diagonal, opaque->off_diagonal, opaque->right_hand_side);
+                      } else {
+                          diagonalNSC(opaque, i, dt, current, opaque->diagonal, opaque->off_diagonal, opaque->right_hand_side);
+                      }
+                  });
     double m;
     for (int it = 1; it < opaque->resolution; ++it) {
         m = opaque->off_diagonal[it] / opaque->diagonal[it-1];
@@ -224,7 +227,7 @@ void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
     opaque->temperatures[opaque->resolution - 1] = opaque->right_hand_side[opaque->resolution - 1] / opaque->diagonal[opaque->resolution -1];
     for (int il = opaque->resolution-2; il >=1; --il){
         opaque->temperatures[il] = (opaque->right_hand_side[il] - opaque->off_diagonal[il] *  opaque->temperatures[il + 1]) / opaque->diagonal[il];
-        if (not isSC(current, opaque->temperatures[il], opaque->Ic0K, opaque->Tc)){
+        if (!isSC(current, opaque->temperatures[il], opaque->Ic0K, opaque->Tc)){
             resistance += opaque->Rsegment;
         }
         if (opaque->temperatures[il] > Tmax){
