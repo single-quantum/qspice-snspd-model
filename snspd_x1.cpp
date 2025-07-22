@@ -235,15 +235,11 @@ extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double
         createHotspot(inst, current);
    }
    else{
-        if (inst->Tmax <= inst->Tsub*TSUBERROR && isSC(current, inst->Tsub, inst->Ic0K, inst->Tc)){
-            if (inst->Tmax != inst->Tsub){
-                std::fill(inst->temperatures, inst->temperatures + inst->resolution, inst->Tsub);
-                inst->Tmax = inst->Tsub;
-            }
-            ROUT=MINRES;
-        }
-        else{
+        if (t > inst->ths){
             calcTotalResitance(inst, current, dt);
+        } else{
+            ROUT=MINRES;
+            return;
         }
    }
    ROUT=inst->resistance;
