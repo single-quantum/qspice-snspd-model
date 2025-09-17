@@ -8,7 +8,7 @@
 #include <vector>
 
 const double TSUBERROR = 1.01;
-const double MINRES = 1e-12;
+const double MINRES = 0;
 union uData
 {
    bool b;
@@ -235,12 +235,7 @@ extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double
         createHotspot(inst, current);
    }
    else{
-        if (t > inst->ths){
-            calcTotalResitance(inst, current, dt);
-        } else{
-            ROUT=MINRES;
-            return;
-        }
+    calcTotalResitance(inst, current, dt);
    }
    ROUT=inst->resistance;
 
