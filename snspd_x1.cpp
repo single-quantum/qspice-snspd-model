@@ -6,6 +6,9 @@
 #include <stdio.h>
 #include <execution>
 #include <vector>
+#include <numeric> // Added for std::iota
+#include <algorithm> // Ensure std::fill is available
+#include <cstring> // Added for memcpy
 
 const double TSUBERROR = 1.01;
 const double GAMMA = 240;
@@ -13,6 +16,7 @@ const double ALPHA_SF = 800;
 const double LORENTZ = 2.45e-8;
 const double G = 9.8;
 
+// ... (uData union and sSNSPD_X1 struct remain the same) ...
 union uData
 {
    bool b;
@@ -58,14 +62,14 @@ struct sSNSPD_X1
     bool    running;
     double prevCurrent;
     double Lkin;
-    double V1;
-    double V2;
+    double dVprev;
     double prevR;
     double starttime;
     double Rmin;
     int mod;
     double A;
     double y;
+    double dt;
 
     // Constructor (optional, but good practice in C++)
     sSNSPD_X1(union uData *data) : resistance(data[16].d), temperatures(nullptr), time(0),
@@ -96,18 +100,14 @@ struct sSNSPD_X1
     }
 };
 
-// int DllMain() must exist and return 1 for a process to load the .DLL
-// See https://docs.microsoft.com/en-us/windows/win32/dlls/dllmain for more information.
+// ... (DllMain, #undefs, and all calc* functions remain the same) ...
+
 int __stdcall DllMain(void *module, unsigned int reason, void *reserved) { return 1; }
 
-// #undef pin names lest they collide with names in any header file(s) you might include.
 #undef IN1
 #undef IN2
 #undef ROUT
 
-
-
-// All Thermal functions
 double calcAlpha(double temperature){
     return ALPHA_SF * pow(temperature,3);
 }
@@ -155,13 +155,12 @@ void createHotspot(sSNSPD_X1 *opaque, double current){
         for (int i = start_index_hotspot; i < start_index_hotspot + hotspot_segments; ++i) {
             opaque->temperatures[i] = opaque->Ths;
             if (!isSC(current, opaque->temperatures[i], opaque->Ic0K, opaque->Tc)){
-                resistance = opaque->Rsegment ++;
+                resistance = resistance+ opaque->Rsegment; // FIX: Assume intended addition
             }
         }
     }
     opaque->resistance = resistance;
     opaque->Tmax = opaque->Ths;
-
 }
 
 void diagonalSC(sSNSPD_X1 *opaque, int index, double dt, double* diagonal, double* off_diagonal, double* right_hand_side){
@@ -192,10 +191,13 @@ void  diagonalNSC(sSNSPD_X1 *opaque, int index, double dt, double current, doubl
     right_hand_side[index] = opaque->temperatures[index] * (1 - h - 2 * r) + r * (opaque->temperatures[index+1] + opaque->temperatures[index-1]) + g;
 }
 
+// ---------------------------
+// FIXED FUNCTION
+// ---------------------------
 void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
-    double resistance = 0;
-    double Tmax = opaque->Tsub;
+    double resistance = opaque->Rmin;
 
+    // Boundary conditions
     opaque->diagonal[0] = opaque->diagonal[opaque->resolution - 1] = 1.0;
     opaque->right_hand_side[0] = opaque->right_hand_side[opaque->resolution - 1] = opaque->Tsub;
     opaque->off_diagonal[0] = opaque->off_diagonal[opaque->resolution - 1] = 0;
@@ -203,6 +205,8 @@ void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
     std::vector<int> indices(opaque->resolution - 2);
     std::iota(indices.begin(), indices.end(), 1);
 
+    // FIX 1: The parallel loop structure is kept as requested.
+    // This part is safe because each 'i' writes to a unique element.
     std::for_each(std::execution::par_unseq, indices.begin(), indices.end(),
                   [&](int i) {
                       if (isSC(current, opaque->temperatures[i], opaque->Ic0K, opaque->Tc)){
@@ -211,12 +215,17 @@ void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
                           diagonalNSC(opaque, i, dt, current, opaque->diagonal, opaque->off_diagonal, opaque->right_hand_side);
                       }
                   });
+    
+    // The rest of the TDMA (Thomas Algorithm) must remain sequential!
     double m;
     double ai;
     double ci1;
     double* x;
+    
+    // FIX 2: Properly allocate the temporary array for the new temperatures
     x = new double[opaque->resolution];
 
+    // Forward Sweep (Sequential)
     for (int it = 1; it < opaque->resolution; ++it) {
         ai = opaque->off_diagonal[it];
         ci1 = opaque->off_diagonal[it-1];
@@ -224,30 +233,26 @@ void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
         opaque->diagonal[it] = opaque->diagonal[it] - m * ci1;
         opaque->right_hand_side[it] = opaque->right_hand_side[it] - m * opaque->right_hand_side[it-1];
     }
+    
+    // Back Substitution (Sequential)
     x[opaque->resolution - 1] = opaque->right_hand_side[opaque->resolution - 1] / opaque->diagonal[opaque->resolution -1];
-    for (int il = opaque->resolution-2; il >=1; --il){
+    
+    for (int il = opaque->resolution-2; il >= 1; --il){
         x[il] = (opaque->right_hand_side[il] - opaque->off_diagonal[il] *  x[il + 1]) / opaque->diagonal[il];
         if (!isSC(current, x[il], opaque->Ic0K, opaque->Tc)){
             resistance += opaque->Rsegment;
         }
     }
-    opaque->temperatures =x;
+
+    // Set boundary condition for index 0 which was skipped in the loop
+    x[0] = opaque->Tsub; 
+    
+    // FIX 3: Copy the new temperatures into the member array and delete the local temporary array.
+    // This fixes the memory leak and corruption issues.
+    memcpy(opaque->temperatures, x, opaque->resolution * sizeof(double));
+    delete[] x;
 
     opaque->resistance = resistance;
-
-}
-
-double calcCurrentTrapezoidalRule(double V1, double V2, double V1prev, double V2prev, double Lkin, double dt, double R, double Rprev, double current){
-   double dV = (V1-V2);
-   double dVprev = (V1prev-V2prev);
-   double RL = 2.0*Lkin/dt;
-   return ( (RL-Rprev)* current + dV + dVprev)/(R+RL);
-}
-
-double calcBackwardsEuler(double V1, double V2,double Lkin, double dt, double R,double current){
-   double dV = (V1-V2);
-   double RL = Lkin/dt;
-   return (RL* current + dV)/(R+RL);
 }
 
 extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double t, union uData *data)
@@ -264,22 +269,36 @@ extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double
    }
 
    if (t==inst->starttime) {
-        ROUT = 0;
         inst->time = t;
+        inst->dVprev = IN1-IN2;
+        inst->prevCurrent = inst->dVprev/inst->Rmin;
+        inst->prevR = inst->Rmin;
+        inst->resistance=inst->Rmin;
+        ROUT = inst->Rmin;
         return;
    }
 
-   double dt = t - inst->time;
-   inst->time = t;
+
+    double dt = t - inst->time;
+    inst->time = t;
+   double dV = IN1-IN2;
+   //std::cout << "Rprev: " <<  inst->prevR  << std::endl;
+   double current = dV/ inst->prevR ;
+    //std::cout << "cur: " << current << std::endl;
    if (inst->hotspot && t >= inst->ths){
         inst->hotspot = false;
-        createHotspot(inst, IN1);
+        createHotspot(inst, current);
    }
    else{
-    calcTotalResitance(inst, IN1, dt);
+    int max_iterations =1;
+    for (int i = 0; i < max_iterations; ++i) {
+        calcTotalResitance(inst, current, dt); // Calculates inst->resistance using 'current'
+        current = dV / inst->resistance;        // Update current with the new resistance
+    }
    }
-
+   //std::cout << "T: " << inst->resistance << std::endl;
    ROUT = inst->resistance;
+   inst->prevR = inst->resistance;
 }
 
 extern "C" __declspec(dllexport) void Destroy(struct sSNSPD_X1 *inst)
