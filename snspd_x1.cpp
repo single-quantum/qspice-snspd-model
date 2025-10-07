@@ -15,8 +15,9 @@ const double GAMMA = 240;
 const double ALPHA_SF = 800;
 const double LORENTZ = 2.45e-8;
 const double G = 9.8;
+const double timestep = 2e-12;
 
-// ... (uData union and sSNSPD_X1 struct remain the same) ...
+// ... (uData union remains the same) ...
 union uData
 {
    bool b;
@@ -37,7 +38,6 @@ union uData
 struct sSNSPD_X1
 {
     double resistance;
-    //double resistancePrev;
     double* temperatures;
     double  width;
     double  length;
@@ -60,22 +60,18 @@ struct sSNSPD_X1
     double* right_hand_side;
     double  Tmax;
     bool    running;
-    double prevCurrent;
     double Lkin;
-    double dVprev;
-    double prevR;
     double starttime;
     double Rmin;
     int mod;
     double A;
-    double y;
     double dt;
 
     // Constructor (optional, but good practice in C++)
-    sSNSPD_X1(union uData *data) : resistance(data[16].d), temperatures(nullptr), time(0),
-    width(data[2].d), length(data[3].d), thickness(data[4].d), resolution(data[5].i), Tsub(data[7].d),
-    Tc(data[6].d),  Ic0K(data[8].d), Rsheet(data[9].d), hotspot(data[10].b), ths(data[11].d), 
-    Ths(data[12].d), sizehs(data[13].d), photonnumber(data[14].i), Lkin(data[15].d), Rmin(data[16].d), mod(data[17].i){
+    sSNSPD_X1(union uData *data) : resistance(data[15].d), temperatures(nullptr), time(0),
+    width(data[1].d), length(data[2].d), thickness(data[3].d), resolution(data[4].i), Tsub(data[6].d),
+    Tc(data[5].d),  Ic0K(data[7].d), Rsheet(data[8].d), hotspot(data[9].b), ths(data[10].d), 
+    Ths(data[11].d), sizehs(data[12].d), photonnumber(data[13].i), Lkin(data[14].d), Rmin(data[15].d), mod(data[16].i){
         temperatures = new double[resolution]; // Use '->' to access member via pointer
         diagonal = new double[resolution];
         off_diagonal = new double[resolution];
@@ -148,7 +144,6 @@ void createHotspot(sSNSPD_X1 *opaque, double current){
     int PNR = opaque->photonnumber;
     int hotspot_segments = (int)(opaque->sizehs * opaque->resolution / opaque->length);
     double resistance = opaque->Rmin;
-    double Tmax = opaque->Tsub;
 
     for (int n = 0; n < PNR; ++n) {
         int start_index_hotspot = (1 + n)*opaque->resolution / (1 + PNR) - (hotspot_segments / 2);
@@ -205,8 +200,7 @@ void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
     std::vector<int> indices(opaque->resolution - 2);
     std::iota(indices.begin(), indices.end(), 1);
 
-    // FIX 1: The parallel loop structure is kept as requested.
-    // This part is safe because each 'i' writes to a unique element.
+    // Parallel construction of the matrix elements (safe)
     std::for_each(std::execution::par_unseq, indices.begin(), indices.end(),
                   [&](int i) {
                       if (isSC(current, opaque->temperatures[i], opaque->Ic0K, opaque->Tc)){
@@ -222,7 +216,7 @@ void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
     double ci1;
     double* x;
     
-    // FIX 2: Properly allocate the temporary array for the new temperatures
+    // Allocate the temporary array for the new temperatures
     x = new double[opaque->resolution];
 
     // Forward Sweep (Sequential)
@@ -244,23 +238,22 @@ void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
         }
     }
 
-    // Set boundary condition for index 0 which was skipped in the loop
+    // Set boundary condition for index 0
     x[0] = opaque->Tsub; 
     
-    // FIX 3: Copy the new temperatures into the member array and delete the local temporary array.
-    // This fixes the memory leak and corruption issues.
+    // Copy the new temperatures and clean up temporary array
     memcpy(opaque->temperatures, x, opaque->resolution * sizeof(double));
     delete[] x;
 
     opaque->resistance = resistance;
 }
 
+
 extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double t, union uData *data)
 {
-   double IN1          = data[ 0].d; // input
-   double IN2          = data[ 1].d; // input
-   double &ROUT = data[18].d; // output
-   //double &ROUTPREV = data[15].d; // output
+   double IN1          = data[ 0].d; // input: current (I)
+   //double IN2          = data[ 1].d; // input: (unused, but kept for data array consistency)
+   double &ROUT = data[17].d; // output: resistance (R)
    sSNSPD_X1 *inst = *opaque;
 
    if(!inst){
@@ -270,35 +263,23 @@ extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double
 
    if (t==inst->starttime) {
         inst->time = t;
-        inst->dVprev = IN1-IN2;
-        inst->prevCurrent = inst->dVprev/inst->Rmin;
-        inst->prevR = inst->Rmin;
         inst->resistance=inst->Rmin;
-        ROUT = inst->Rmin;
+        ROUT = inst->resistance;
         return;
    }
 
+   double dt = t - inst->time;
+   //std::cout << "dt: " << dt << std::endl;
 
-    double dt = t - inst->time;
-    inst->time = t;
-   double dV = IN1-IN2;
-   //std::cout << "Rprev: " <<  inst->prevR  << std::endl;
-   double current = dV/ inst->prevR ;
-    //std::cout << "cur: " << current << std::endl;
+   inst->time = t;
    if (inst->hotspot && t >= inst->ths){
         inst->hotspot = false;
-        createHotspot(inst, current);
+        createHotspot(inst, IN1);
    }
    else{
-    int max_iterations =1;
-    for (int i = 0; i < max_iterations; ++i) {
-        calcTotalResitance(inst, current, dt); // Calculates inst->resistance using 'current'
-        current = dV / inst->resistance;        // Update current with the new resistance
-    }
+    calcTotalResitance(inst, IN1, dt);
    }
-   //std::cout << "T: " << inst->resistance << std::endl;
    ROUT = inst->resistance;
-   inst->prevR = inst->resistance;
 }
 
 extern "C" __declspec(dllexport) void Destroy(struct sSNSPD_X1 *inst)
