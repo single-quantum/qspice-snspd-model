@@ -16,6 +16,8 @@ const double ALPHA_SF = 800;
 const double LORENTZ = 2.45e-8;
 const double G = 9.8;
 const double timestep = 2e-12;
+const double dt_internal = 1e-11;
+
 
 // ... (uData union remains the same) ...
 union uData
@@ -66,6 +68,8 @@ struct sSNSPD_X1
     int mod;
     double A;
     double dt;
+    double mod_counter;
+    double dtmax;
 
     // Constructor (optional, but good practice in C++)
     sSNSPD_X1(union uData *data) : resistance(data[15].d), temperatures(nullptr), time(0),
@@ -186,9 +190,6 @@ void  diagonalNSC(sSNSPD_X1 *opaque, int index, double dt, double current, doubl
     right_hand_side[index] = opaque->temperatures[index] * (1 - h - 2 * r) + r * (opaque->temperatures[index+1] + opaque->temperatures[index-1]) + g;
 }
 
-// ---------------------------
-// FIXED FUNCTION
-// ---------------------------
 void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
     double resistance = opaque->Rmin;
 
@@ -268,9 +269,8 @@ extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double
         return;
    }
 
-   double dt = t - inst->time;
+   double dt = t - inst->time;   
    //std::cout << "dt: " << dt << std::endl;
-
    inst->time = t;
    if (inst->hotspot && t >= inst->ths){
         inst->hotspot = false;
