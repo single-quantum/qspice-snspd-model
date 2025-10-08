@@ -10,14 +10,7 @@
 #include <algorithm> // Ensure std::fill is available
 #include <cstring> // Added for memcpy
 
-const double TSUBERROR = 1.01;
-const double GAMMA = 240;
-const double ALPHA_SF = 800;
 const double LORENTZ = 2.45e-8;
-const double G = 9.8;
-const double timestep = 2e-12;
-const double dt_internal = 1e-11;
-
 
 // ... (uData union remains the same) ...
 union uData
@@ -49,6 +42,10 @@ struct sSNSPD_X1
     double  Tc;
     double  Tsub;
     double  Ic0K;
+    double B_const;
+    double G_const;
+    double A_const;
+    double GAMMA;
     double  Rsheet;
     double  Rsegment;
     int     photonnumber;
@@ -65,23 +62,27 @@ struct sSNSPD_X1
     double Lkin;
     double starttime;
     double Rmin;
-    int mod;
-    double A;
     double dt;
     double mod_counter;
     double dtmax;
+    double TsubEr;
 
     // Constructor (optional, but good practice in C++)
     sSNSPD_X1(union uData *data) : resistance(data[15].d), temperatures(nullptr), time(0),
     width(data[1].d), length(data[2].d), thickness(data[3].d), resolution(data[4].i), Tsub(data[6].d),
     Tc(data[5].d),  Ic0K(data[7].d), Rsheet(data[8].d), hotspot(data[9].b), ths(data[10].d), 
-    Ths(data[11].d), sizehs(data[12].d), photonnumber(data[13].i), Lkin(data[14].d), Rmin(data[15].d), mod(data[16].i){
+    Ths(data[11].d), sizehs(data[12].d), photonnumber(data[13].i), Lkin(data[14].d), Rmin(data[15].d) {
+        TsubEr = Tsub*(1+data[16].d);
+
         temperatures = new double[resolution]; // Use '->' to access member via pointer
         diagonal = new double[resolution];
         off_diagonal = new double[resolution];
         right_hand_side = new double[resolution];
 
-        A = 2.43*Tc*GAMMA;
+        GAMMA = data[19].d/Tc;
+        A_const = 2.43*GAMMA*Tc;
+        B_const = data[17].d/pow(Tc,3);
+        G_const = data[18].d/pow(Tc,3);
 
         std::fill(temperatures, temperatures + resolution, Tsub);
         dlength    = length / (double)resolution;
@@ -108,8 +109,8 @@ int __stdcall DllMain(void *module, unsigned int reason, void *reserved) { retur
 #undef IN2
 #undef ROUT
 
-double calcAlpha(double temperature){
-    return ALPHA_SF * pow(temperature,3);
+double calcAlpha(double B,double temperature){
+    return B * pow(temperature,3);
 }
 
 double calcKapa(double thickness, double Rsheet, double temperature){
@@ -120,7 +121,7 @@ double calcKapaSC(double thickness, double Rsheet, double Tc, double temperature
     return calcKapa(thickness, Rsheet, temperature) * temperature / Tc;
 }
 
-double calcPhononHC(double temperature){
+double calcPhononHC(double G, double temperature){
     return G * pow(temperature,3);
 }
 
@@ -132,7 +133,7 @@ double calcElectronHCSC(double Tc, double temperature, double A){
     return  A * exp(calcPow(Tc, temperature));
 }
 
-double calcElectronHC(double temperature){
+double calcElectronHC(double GAMMA, double temperature){
     return temperature * GAMMA;
 }
 
@@ -154,7 +155,7 @@ void createHotspot(sSNSPD_X1 *opaque, double current){
         for (int i = start_index_hotspot; i < start_index_hotspot + hotspot_segments; ++i) {
             opaque->temperatures[i] = opaque->Ths;
             if (!isSC(current, opaque->temperatures[i], opaque->Ic0K, opaque->Tc)){
-                resistance = resistance+ opaque->Rsegment; // FIX: Assume intended addition
+                resistance = resistance+ opaque->Rsegment;
             }
         }
     }
@@ -163,9 +164,9 @@ void createHotspot(sSNSPD_X1 *opaque, double current){
 }
 
 void diagonalSC(sSNSPD_X1 *opaque, int index, double dt, double* diagonal, double* off_diagonal, double* right_hand_side){
-    double alpha = calcAlpha(opaque->temperatures[index]);
+    double alpha = calcAlpha(opaque->B_const, opaque->temperatures[index]);
     double kapa = calcKapaSC(opaque->thickness, opaque->Rsheet, opaque->Tc, opaque->temperatures[index]);
-    double heat_cap = calcElectronHCSC(opaque->Tc, opaque->temperatures[index], opaque->A) + calcPhononHC(opaque->temperatures[index]);
+    double heat_cap = calcElectronHCSC(opaque->Tc, opaque->temperatures[index], opaque->A_const) + calcPhononHC(opaque->G_const, opaque->temperatures[index]);
 
     double r = kapa * dt / (2 * pow(opaque->dlength,2) * heat_cap);
     double h = alpha * dt / (2 * opaque->thickness * heat_cap);
@@ -177,9 +178,9 @@ void diagonalSC(sSNSPD_X1 *opaque, int index, double dt, double* diagonal, doubl
 }
 
 void  diagonalNSC(sSNSPD_X1 *opaque, int index, double dt, double current, double* diagonal, double* off_diagonal, double* right_hand_side){
-    double alpha = calcAlpha(opaque->temperatures[index]);
+    double alpha = calcAlpha(opaque->B_const, opaque->temperatures[index]);
     double kapa = calcKapa(opaque->thickness, opaque->Rsheet, opaque->temperatures[index]);
-    double heat_cap = calcElectronHC(opaque->temperatures[index]) + calcPhononHC(opaque->temperatures[index]);
+    double heat_cap = calcElectronHC(opaque->GAMMA, opaque->temperatures[index]) + calcPhononHC(opaque->G_const, opaque->temperatures[index]);
 
     double r = kapa * dt / (2 * pow(opaque->dlength,2) * heat_cap);
     double h = alpha * dt / (2 * opaque->thickness * heat_cap);
@@ -192,6 +193,7 @@ void  diagonalNSC(sSNSPD_X1 *opaque, int index, double dt, double current, doubl
 
 void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
     double resistance = opaque->Rmin;
+    opaque->Tmax = opaque->Tsub;
 
     // Boundary conditions
     opaque->diagonal[0] = opaque->diagonal[opaque->resolution - 1] = 1.0;
@@ -237,6 +239,10 @@ void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
         if (!isSC(current, x[il], opaque->Ic0K, opaque->Tc)){
             resistance += opaque->Rsegment;
         }
+        if (x[il] > opaque->Tmax){
+            opaque->Tmax = x[il];
+        }
+
     }
 
     // Set boundary condition for index 0
@@ -252,9 +258,8 @@ void calcTotalResitance(sSNSPD_X1 *opaque, double current, double dt){
 
 extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double t, union uData *data)
 {
-   double IN1          = data[ 0].d; // input: current (I)
-   //double IN2          = data[ 1].d; // input: (unused, but kept for data array consistency)
-   double &ROUT = data[17].d; // output: resistance (R)
+   double CURRENT = data[ 0].d; // input: current (I)
+   double &SNSPRD_R = data[20].d; // output: resistance (R)
    sSNSPD_X1 *inst = *opaque;
 
    if(!inst){
@@ -265,21 +270,24 @@ extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double
    if (t==inst->starttime) {
         inst->time = t;
         inst->resistance=inst->Rmin;
-        ROUT = inst->resistance;
+        SNSPRD_R = inst->resistance;
         return;
    }
 
-   double dt = t - inst->time;   
-   //std::cout << "dt: " << dt << std::endl;
+   double dt = t - inst->time;
    inst->time = t;
    if (inst->hotspot && t >= inst->ths){
         inst->hotspot = false;
-        createHotspot(inst, IN1);
+        createHotspot(inst, CURRENT);
+   }
+   else if(inst->Tmax <= inst->TsubEr && isSC(CURRENT, inst->Tmax, inst->Ic0K, inst->Tc)){
+        inst->resistance = inst->Rmin;
+        inst->Tmax = inst->Tsub;
    }
    else{
-    calcTotalResitance(inst, IN1, dt);
+    calcTotalResitance(inst, CURRENT, dt);
    }
-   ROUT = inst->resistance;
+   SNSPRD_R = inst->resistance;
 }
 
 extern "C" __declspec(dllexport) void Destroy(struct sSNSPD_X1 *inst)
