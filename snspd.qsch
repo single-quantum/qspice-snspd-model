@@ -90,6 +90,6 @@
   «text (-5900,2100) 1 7 0 0x1000000 -1 -1 "ï»¿.params Lkin=600n"»
   «text (-5900,1300) 1 7 0 0x1000000 -1 -1 "ï»¿.params Rmin=1e-34"»
   «text (-5900,1100) 1 7 0 0x1000000 -1 -1 "ï»¿.params model=0"»
-  «text (1950,300) 1 7 0 0x1000000 -1 -1 "ï»¿.options method=gear reltol=1e-5"»
+  «text (-5900,900) 1 7 0 0x1000000 -1 -1 "ï»¿.options reltol=1e-5 method=gear"»
 »
 
