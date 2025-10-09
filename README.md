@@ -78,12 +78,6 @@ Some parameters of the SNSPD simulation can be changed to your liking:
 
 
 
-
-
-
-
-
-
 ## How to Compile
 
 ### Requirements
@@ -91,7 +85,7 @@ Some parameters of the SNSPD simulation can be changed to your liking:
 
 Open your developer terminal in the project folder and run the command:
 
-    cl /LD /std:c++17 snspd_x1.cpp kernel32.lib
+    cl /LD /std:c++17 /EHsc snspd_x1.cpp kernel32.lib
 
 To cimpile the c++ libraries for the snspd qspice model.
 
