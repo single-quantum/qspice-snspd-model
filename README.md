@@ -30,7 +30,7 @@ For more technical information see: [Modeling the Electrical and Thermal Respons
 You can now run the examples form the examples folder. For a simple snspd read out circuit, open the basic.qsch example.
 
 ### Simulation recommendations
-Since this simulation is stiff, to big of a time step can make the simulation very unstable. We therefore we recommend a maximum timestep of 1ps. Another option in spice that adds more stability is using the gears method instead of the trapezoidal rule to solve transient simulations. By default the snspd model includes this option. However, you can also manualy add it by adding spice diretive:
+Since this simulation is stiff, too big of a time step can make the simulation very unstable. We therefore we recommend a maximum timestep of 1ps. Another option in spice that adds more stability is using the gears method instead of the trapezoidal rule to solve transient simulations. By default the snspd model includes this option. However, you can also manualy add it by adding spice diretive:
 
     .options method=gear
 
