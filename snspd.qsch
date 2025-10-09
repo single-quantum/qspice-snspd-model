@@ -23,7 +23,7 @@
       «text (2550,-350) 0.681 13 0 0x1000000 -1 -1 "float Rmin=Rmin"»
       «text (2650,-500) 0.681 13 0 0x1000000 -1 -1 "float TsubTol=TsubTol"»
       «text (2750,-650) 0.681 13 0 0x1000000 -1 -1 "float alpha_Tc=alpha_Tc"»
-      «text (2900,-800) 0.681 13 0 0x1000000 -1 -1 "float cphoton_Tc=cphoton_Tc"»
+      «text (2900,-800) 0.681 13 0 0x1000000 -1 -1 "float cphonon_Tc=cphonon_Tc"»
       «text (2900,-1000) 0.681 13 0 0x1000000 -1 -1 "float celectron_Tc=celectron_Tc"»
       «pin (-500,0) (0,0) 1 14 145 0x0 -1 "I_B1"»
       «pin (0,-300) (200,50) 1 14 146 0x0 -1 "ROUT"»
@@ -94,7 +94,7 @@
   «text (-7700,-2450) 1 7 0 0x1000000 -1 -1 "ï»¿.params Rmin=1e-34"»
   «text (-7700,-2150) 1 7 0 0x1000000 -1 -1 "ï»¿.params TsubTol=1e-4"»
   «text (-7700,2500) 1 7 0 0x1000000 -1 -1 "ï»¿.options method=gear"»
-  «text (-7700,-800) 1 7 0 0x1000000 -1 -1 "ï»¿.params alpha_Tc=8e5 cphoton_Tc=9800 celectron_Tc=2400"»
+  «text (-7700,-800) 1 7 0 0x1000000 -1 -1 "ï»¿.params alpha_Tc=8e5 cphonon_Tc=9800 celectron_Tc=2400"»
   «text (-4100,2250) 1 7 0 0x1000000 -1 -1 "ï»¿# Kinetic Inductance SNSPD"»
   «text (-7700,1600) 1 7 0 0x1000000 -1 -1 "ï»¿.params resolution=1000"»
   «text (-4100,1900) 1 7 0 0x1000000 -1 -1 "ï»¿# Dimensions of SNSPD nanowire"»
