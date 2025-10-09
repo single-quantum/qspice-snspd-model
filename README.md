@@ -14,7 +14,8 @@ For more technical information see: [Modeling the Electrical and Thermal Respons
 
 ### Requirements
 1. [QSpice](https://www.qorvo.com/design-hub/design-tools/interactive/qspice)
-2. This project folder stored somewhere on you PC with compiled files. [See how to compile](#how-to-compile)
+2. Unpacked pre-compiled release in a folder somewhere on your PC: [Releases](https://github.com/single-quantum/qspice-snspd-model/releases/)
+3. OR Unpack this project somewhere on your PC and compile the project manually. [See how to compile](#how-to-compile)
 
 ### Add model to QSpice
 1. Open QSpice
