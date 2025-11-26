@@ -51,6 +51,7 @@ Some parameters of the SNSPD simulation can be changed to your liking:
 | Lkin| Kinetic Inductance of SNSPD | 600 nH |
 | Rsheet| Sheet Resistance of SNSPD | 600 $\Omega$|
 | Ic0k| Critical Current at 0K | 20 $\mu A$|
+| Ci | Intrinsic Capacitance | 6.33f |
 
 #### Thermal
 | Parameter   | Description | Default |
@@ -76,6 +77,7 @@ Some parameters of the SNSPD simulation can be changed to your liking:
 | :---------- | :--------- | ------: |
 | TsubTol | Tolerance for when an element is considered fully cooled to substrate temperature. | 1e-4 |
 | Rmin | Reference resistance of the SNSPD model. SPICE doesnt like 0 values so Rmin is a very small resistance | 1e-34 |
+| resolution | Total elements of heat equation CN vector | 1000 |
 
 
 
