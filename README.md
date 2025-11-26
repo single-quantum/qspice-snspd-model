@@ -67,6 +67,7 @@ Some parameters of the SNSPD simulation can be changed to your liking:
 | :---------- | :--------- | ------: |
 | hotspot | Enable hostpot creation | 1 |
 | hstime | Time for hotspot to be created | 0 s |
+| RepRate | Repetition Rate of Photon Absorbption | 0 (no repetition) |
 | Ths | Hotspot temperature | 8 K |
 | photonnumber | Amount of hotspots created at the same time | 1 |
 
@@ -87,7 +88,7 @@ Open your developer terminal in the project folder and run the command:
 
     cl /LD /std:c++17 /EHsc snspd_x1.cpp kernel32.lib
 
-To cimpile the c++ libraries for the snspd qspice model.
+To compile the c++ libraries for the snspd qspice model.
 
 
 

@@ -46,7 +46,7 @@ struct sSNSPD_X1
     double  Rsheet;
     double  Rsegment;
     int     photonnumber;
-    bool    hotspot;
+    float   repdt;
     double  ths;
     double  Ths;
     double  sizehs;
@@ -67,13 +67,21 @@ struct sSNSPD_X1
     double g_const;
     double _1overTc;
     double _1overTcsquared;
+    bool triggerHotspot;
 
     sSNSPD_X1(union uData *data) : resistance(data[15].d), time(0),
     width(data[1].d), length(data[2].d), thickness(data[3].d), resolution(data[4].i), Tsub(data[6].d),
-    Tc(data[5].d),  Ic0K(data[7].d), Rsheet(data[8].d), hotspot(data[9].b), ths(data[10].d), 
-    Ths(data[11].d), sizehs(data[12].d), photonnumber(data[13].i), Lkin(data[14].d), Rmin(data[15].d) {
+    Tc(data[5].d),  Ic0K(data[7].d), Rsheet(data[8].d), ths(data[10].d), repdt(0),
+    Ths(data[11].d), sizehs(data[12].d), photonnumber(data[13].i), Lkin(data[14].d), Rmin(data[15].d), triggerHotspot(false) {
+        const double reprate = data[9].d;
+        if (reprate > 0) {
+            repdt = 1/reprate;
+        }
+        if (ths >= 0){
+            triggerHotspot = true;
+        }
+        
         TsubEr = Tsub*(1+data[16].d);
-
         temperatures_curr.resize(resolution, Tsub);
         temperatures_next.resize(resolution, Tsub);
         diagonal.resize(resolution);
@@ -254,9 +262,13 @@ extern "C" __declspec(dllexport) void snspd_x1(struct sSNSPD_X1 **opaque, double
 
    double dt = t - inst->time;
    inst->time = t;
-   if (inst->hotspot && t >= inst->ths){
-        inst->hotspot = false;
+   if (inst->triggerHotspot && t >= inst->ths){
         createHotspot(inst, CURRENT);
+        if (inst->repdt > 0){
+            inst->ths = inst->ths + inst->repdt;
+        }else{
+           inst->triggerHotspot = false; 
+        }
    }
    else if(inst->Tmax <= inst->TsubEr && isSC(CURRENT, inst->Tmax, inst->Ic0K, inst->Tc, inst->_1overTcsquared)){
         inst->resistance = inst->Rmin;
